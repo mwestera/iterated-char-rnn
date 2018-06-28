@@ -31,6 +31,9 @@ argparser.add_argument('--shuffle', action='store_true')
 argparser.add_argument('--no_cuda', action='store_true')
 args = argparser.parse_args()
 
+# TODO Implement config_utils for random hyperparameter search on cluster.
+# TODO Add hyperparameter to feed word embedding at every decoder step.
+
 if not args.no_cuda:
     print("Using CUDA")
 
@@ -129,7 +132,7 @@ try:
             for i, pred in zip(preview_inds, predictions):
                 print(idx_to_word[i], pred[1:].split('<')[0])
 
-            # TODO implement evaluation measures
+            # TODO implement evaluation measures, mainly: semantic & typographical similarity of target-prediction, expressiveness/distinguishability, compositionality
 
     print("Saving...")
     save()
