@@ -8,32 +8,42 @@ import argparse
 from helpers import *
 from model import *
 
-def generate(decoder, prime_str='A', predict_len=100, temperature=0.8, cuda=False):
-    hidden = decoder.init_hidden(1)
-    prime_input = Variable(char_tensor(prime_str).unsqueeze(0))
+def generate(decoder, word_ids, prime_str='>', predict_len=20, cuda=False):
 
+    n_words = len(word_ids)
+
+    predicted = [prime_str for _ in range(n_words)]
+
+    inp = torch.zeros(n_words, 1).long()
+    for i in range(n_words):
+        inp[i] = char_tensor(prime_str)
+
+    inp = Variable(inp)
+    hidden = decoder.init_hidden(n_words)
+    word_ids = Variable(torch.LongTensor(word_ids))
     if cuda:
         hidden = hidden.cuda()
-        prime_input = prime_input.cuda()
-    predicted = prime_str
+        inp = inp.cuda()
+        word_ids = word_ids.cuda()
 
-    # Use priming string to "build up" hidden state
-    for p in range(len(prime_str) - 1):
-        _, hidden = decoder(prime_input[:,p], hidden)
-        
-    inp = prime_input[:,-1]
-    
+
     for p in range(predict_len):
-        output, hidden = decoder(inp, hidden)
-        
+
+        output, hidden = decoder(inp, hidden, seed=word_ids if p == 0 else None)
+
         # Sample from the network as a multinomial distribution
-        output_dist = output.data.view(-1).div(temperature).exp()
-        top_i = torch.multinomial(output_dist, 1)[0]
+        # output_dist = output.data.view(n_words, -1).div(temperature).exp()
+
+        values, top_i = torch.max(output, 1)
 
         # Add predicted character to string and use as next input
-        predicted_char = all_characters[top_i]
-        predicted += predicted_char
-        inp = Variable(char_tensor(predicted_char).unsqueeze(0))
+        predicted_char = [all_characters[i] for i in top_i]
+        predicted = [predicted[i] + predicted_char[i] for i in range(n_words)]
+
+        inp = torch.zeros(n_words, 1).long()
+        for i in range(n_words):
+            inp[i] = char_tensor(predicted_char[i])
+        inp = Variable(inp)
         if cuda:
             inp = inp.cuda()
 
