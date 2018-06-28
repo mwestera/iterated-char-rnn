@@ -6,6 +6,8 @@ import torch.nn as nn
 from torch.autograd import Variable
 import argparse
 import os
+import pickle
+import numpy as np
 
 from tqdm import tqdm
 
@@ -71,18 +73,26 @@ def save():
     print('Saved as %s' % save_filename)
 
 # Initialize models and start training
+# TODO Also experiment with https://github.com/facebookresearch/fastText/blob/master/pretrained-vectors.md, which supposedly respect morphological structure more.
 
-seed_embedding = None        # TODO load Word2Vec
+# word_vectors = np.load('friends.train.scene_delim__GoogleNews-vectors-negative300.npy')[1:]
+pretrained = np.genfromtxt('glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False)
+print(pretrained)
+idx_to_word = pretrained[:,0]
+word_to_idx = {i: idx_to_word[i] for i in range(len(idx_to_word))}
+word_vectors = pretrained[:,1:].astype(float)
+
+print('Loaded word embeddings.')
 
 decoder = CharRNN(
-    seed_embedding,
+    torch.Tensor(word_vectors),
     n_characters,
     args.hidden_size,
     n_characters,
     model=args.model,
     n_layers=args.n_layers,
 )
-decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=args.learning_rate)
+decoder_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad,decoder.parameters()), lr=args.learning_rate)
 criterion = nn.CrossEntropyLoss()
 
 if not args.no_cuda:
