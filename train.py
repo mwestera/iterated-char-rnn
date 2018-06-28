@@ -19,12 +19,11 @@ from generate import *
 argparser = argparse.ArgumentParser()
 argparser.add_argument('filename', type=str)
 argparser.add_argument('--model', type=str, default="gru")
-argparser.add_argument('--n_epochs', type=int, default=50)
+argparser.add_argument('--n_epochs', type=int, default=1000)
 argparser.add_argument('--print_every', type=int, default=100)
 argparser.add_argument('--hidden_size', type=int, default=100)
 argparser.add_argument('--n_layers', type=int, default=2)
 argparser.add_argument('--learning_rate', type=float, default=0.01)
-argparser.add_argument('--chunk_len', type=int, default=200)
 argparser.add_argument('--batch_size', type=int, default=100)
 argparser.add_argument('--shuffle', action='store_true')
 argparser.add_argument('--no_cuda', action='store_true')
@@ -35,37 +34,45 @@ if not args.no_cuda:
 
 file, file_len = read_file(args.filename)
 
-def random_training_set(chunk_len, batch_size):
-    inp = torch.LongTensor(batch_size, chunk_len)
-    target = torch.LongTensor(batch_size, chunk_len)
-    for bi in range(batch_size):
-        start_index = random.randint(0, file_len - chunk_len)
-        end_index = start_index + chunk_len + 1
-        chunk = file[start_index:end_index]
-        inp[bi] = char_tensor(chunk[:-1])
-        target[bi] = char_tensor(chunk[1:])
+
+def random_training_set(training_ids, batch_size):
+    word_ids = torch.LongTensor(random.sample(training_ids, batch_size))
+    max_len = max([len(idx_to_word[w]) for w in word_ids]) + 1
+    char_tensors = torch.LongTensor(batch_size, max_len)
+    for i, word_idx in enumerate(word_ids):
+        char_tensors[i] = char_tensor(idx_to_word[word_idx], max_len)
+    inp = char_tensors[:,:-1]
+    target = char_tensors[:,1:]
+
     inp = Variable(inp)
     target = Variable(target)
+    word_ids = Variable(word_ids)
     if not args.no_cuda:
         inp = inp.cuda()
         target = target.cuda()
-    return inp, target
+        word_ids = word_ids.cuda()
 
-def train(inp, target):
+    return word_ids, inp, target
+
+
+def train(word_ids, inp, target):
     hidden = decoder.init_hidden(args.batch_size)
     if not args.no_cuda:
         hidden = hidden.cuda()
     decoder.zero_grad()
     loss = 0
 
-    for c in range(args.chunk_len):
-        output, hidden = decoder(inp[:,c], hidden)
+    max_len = inp.size()[1]
+
+    for c in range(max_len):
+        output, hidden = decoder(inp[:,c], hidden, seed=word_ids)
         loss += criterion(output.view(args.batch_size, -1), target[:,c])
 
     loss.backward()
     decoder_optimizer.step()
 
-    return loss.data.item() / args.chunk_len
+    return loss.data.item() / max_len
+
 
 def save():
     save_filename = os.path.splitext(os.path.basename(args.filename))[0] + '.pt'
@@ -77,12 +84,13 @@ def save():
 
 # word_vectors = np.load('friends.train.scene_delim__GoogleNews-vectors-negative300.npy')[1:]
 pretrained = np.genfromtxt('glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False)
-print(pretrained)
 idx_to_word = pretrained[:,0]
 word_to_idx = {i: idx_to_word[i] for i in range(len(idx_to_word))}
 word_vectors = pretrained[:,1:].astype(float)
 
-print('Loaded word embeddings.')
+suitable_indices = [i for i in range(len(idx_to_word)) if idx_to_word[i].isalpha()]
+
+print('Loaded word embeddings ({0} words; {1} suitable).'.format(len(idx_to_word), len(suitable_indices)))
 
 decoder = CharRNN(
     torch.Tensor(word_vectors),
@@ -104,8 +112,11 @@ loss_avg = 0
 
 try:
     print("Training for %d epochs..." % args.n_epochs)
+
+    training_inds = suitable_indices        # TODO implement bottleneck
+
     for epoch in tqdm(range(1, args.n_epochs + 1)):
-        loss = train(*random_training_set(args.chunk_len, args.batch_size))
+        loss = train(*random_training_set(training_inds, args.batch_size))
         loss_avg += loss
 
         if epoch % args.print_every == 0:
