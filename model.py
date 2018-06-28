@@ -17,6 +17,7 @@ class CharRNN(nn.Module):
         self.seed.weight.data = torch.from_numpy(seed)
         seed.weight.requires_grad = False
         # Verify that this thing remains fixed during training.
+        self.seed_to_hidden = nn.Linear(seed.shape[1], hidden_size)
 
         self.encoder = nn.Embedding(input_size, hidden_size)
         if self.model == "gru":
@@ -25,14 +26,20 @@ class CharRNN(nn.Module):
             self.rnn = nn.LSTM(hidden_size, hidden_size, n_layers)
         self.decoder = nn.Linear(hidden_size, output_size)
 
-    def forward(self, input, hidden):
+    def forward(self, input, hidden, seed=None):
+        if seed is not None:
+            seed_emb = self.seed(seed)
+            hidden = hidden + self.seed_to_hidden(seed_emb)
         batch_size = input.size(0)
         encoded = self.encoder(input)
         output, hidden = self.rnn(encoded.view(1, batch_size, -1), hidden)
         output = self.decoder(output.view(batch_size, -1))
         return output, hidden
 
-    def forward2(self, input, hidden):
+    def forward2(self, input, hidden, seed=None):
+        if seed is not None:
+            seed_emb = self.seed(seed)
+            hidden = hidden + self.seed_to_hidden(seed_emb)
         encoded = self.encoder(input.view(1, -1))
         output, hidden = self.rnn(encoded.view(1, 1, -1), hidden)
         output = self.decoder(output.view(1, -1))
