@@ -37,11 +37,12 @@ file, file_len = read_file(args.filename)
 
 def random_training_set(training_ids, batch_size):
     word_ids = torch.LongTensor(random.sample(training_ids, batch_size))
-    max_len = max([len(idx_to_word[w]) for w in word_ids]) + 1
+    max_len = max([len(idx_to_word[w]) for w in word_ids]) + 2
     char_tensors = torch.LongTensor(batch_size, max_len)
     for i, word_idx in enumerate(word_ids):
-        char_tensors[i] = char_tensor(idx_to_word[word_idx], max_len)
+        char_tensors[i] = char_tensor(idx_to_word[word_idx], padding=max_len)
     inp = char_tensors[:,:-1]
+    inp[inp==-1] = 1        # To avoid error
     target = char_tensors[:,1:]
 
     inp = Variable(inp)
@@ -65,7 +66,7 @@ def train(word_ids, inp, target):
     max_len = inp.size()[1]
 
     for c in range(max_len):
-        output, hidden = decoder(inp[:,c], hidden, seed=word_ids)
+        output, hidden = decoder(inp[:,c], hidden, seed=word_ids if c == 0 else None)
         loss += criterion(output.view(args.batch_size, -1), target[:,c])
 
     loss.backward()
@@ -101,7 +102,7 @@ decoder = CharRNN(
     n_layers=args.n_layers,
 )
 decoder_optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad,decoder.parameters()), lr=args.learning_rate)
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
 if not args.no_cuda:
     decoder.cuda()
@@ -120,8 +121,9 @@ try:
         loss_avg += loss
 
         if epoch % args.print_every == 0:
+            preview_inds = training_inds[:100]
             print('[%s (%d %d%%) %.4f]' % (time_since(start), epoch, epoch / args.n_epochs * 100, loss))
-            print(generate(decoder, 'Wh', 100, cuda=not args.no_cuda), '\n')
+            print(generate(decoder, preview_inds, predict_len=20, cuda=not args.no_cuda), '\n')
 
     print("Saving...")
     save()
