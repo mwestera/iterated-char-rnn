@@ -19,12 +19,13 @@ from generate import *
 argparser = argparse.ArgumentParser()
 argparser.add_argument('filename', type=str)
 argparser.add_argument('--model', type=str, default="gru")
-argparser.add_argument('--n_epochs', type=int, default=1000)
+argparser.add_argument('--n_epochs', type=int, default=10000)
 argparser.add_argument('--print_every', type=int, default=100)
-argparser.add_argument('--hidden_size', type=int, default=100)
+argparser.add_argument('--hidden_size', type=int, default=400)
 argparser.add_argument('--n_layers', type=int, default=2)
-argparser.add_argument('--learning_rate', type=float, default=0.01)
-argparser.add_argument('--batch_size', type=int, default=100)
+argparser.add_argument('--learning_rate', type=float, default=0.001)
+argparser.add_argument('--batch_size', type=int, default=5000)
+# argparser.add_argument('--gen_temp', type=int, default=.1)
 argparser.add_argument('--shuffle', action='store_true')
 argparser.add_argument('--no_cuda', action='store_true')
 args = argparser.parse_args()
@@ -121,9 +122,11 @@ try:
         loss_avg += loss
 
         if epoch % args.print_every == 0:
-            preview_inds = training_inds[:100]
+            preview_inds = training_inds[150:200]
             print('[%s (%d %d%%) %.4f]' % (time_since(start), epoch, epoch / args.n_epochs * 100, loss))
-            print(generate(decoder, preview_inds, predict_len=20, cuda=not args.no_cuda), '\n')
+            predictions = generate(decoder, preview_inds, predict_len=20, cuda=not args.no_cuda)        # temperature=args.gen_temp,
+            for i, pred in zip(preview_inds, predictions):
+                print(idx_to_word[i], pred[1:].split('<')[0])
 
     print("Saving...")
     save()

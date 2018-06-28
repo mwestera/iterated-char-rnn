@@ -9,7 +9,7 @@ import torch
 
 # Reading and un-unicode-encoding data
 
-all_characters = '#' + string.ascii_letters
+all_characters = '>' + '<' + string.ascii_letters
 n_characters = len(all_characters)
 
 def read_file(filename):
@@ -18,11 +18,15 @@ def read_file(filename):
 
 # Turning a string into a tensor
 
-def char_tensor(string, length):
+def char_tensor(string, padding=False):
+    length = padding or len(string)
     tensor = torch.zeros(length).long()
-    for c in range(len(string)):
+    if padding:
+        tensor[0] = 0
+        tensor[len(string) + 1] = 1
+    for c in range(length):
         try:
-            tensor[c] = all_characters.index(string[c])
+            tensor[c if not padding else c+1] = all_characters.index(string[c])
         except:
             continue
     return tensor
