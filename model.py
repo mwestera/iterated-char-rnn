@@ -13,9 +13,7 @@ class CharRNN(nn.Module):
         self.output_size = output_size
         self.n_layers = n_layers
 
-        self.seed = nn.Embedding(seed.shape[0], seed.shape[1])
-        self.seed.weight.data = torch.from_numpy(seed)
-        seed.weight.requires_grad = False
+        self.seed = nn.Embedding.from_pretrained(seed, freeze=True)
         # Verify that this thing remains fixed during training.
         self.seed_to_hidden = nn.Linear(seed.shape[1], hidden_size)
 
