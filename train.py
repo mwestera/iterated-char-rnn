@@ -24,8 +24,9 @@ argparser.add_argument('--print_every', type=int, default=100)
 argparser.add_argument('--hidden_size', type=int, default=400)
 argparser.add_argument('--n_layers', type=int, default=2)
 argparser.add_argument('--learning_rate', type=float, default=0.001)
-argparser.add_argument('--batch_size', type=int, default=5000)
+argparser.add_argument('--batch_size', type=int, default=1000)
 # argparser.add_argument('--gen_temp', type=int, default=.1)
+argparser.add_argument('--max_words', type=int, default=10000)
 argparser.add_argument('--shuffle', action='store_true')
 argparser.add_argument('--no_cuda', action='store_true')
 args = argparser.parse_args()
@@ -81,11 +82,8 @@ def save():
     torch.save(decoder, save_filename)
     print('Saved as %s' % save_filename)
 
-# Initialize models and start training
-# TODO Also experiment with https://github.com/facebookresearch/fastText/blob/master/pretrained-vectors.md, which supposedly respect morphological structure more.
-
 # word_vectors = np.load('friends.train.scene_delim__GoogleNews-vectors-negative300.npy')[1:]
-pretrained = np.genfromtxt('glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False)
+pretrained = np.genfromtxt('glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False, max_rows=None if args.max_words == -1 else args.max_words)
 idx_to_word = pretrained[:,0]
 word_to_idx = {i: idx_to_word[i] for i in range(len(idx_to_word))}
 word_vectors = pretrained[:,1:].astype(float)
@@ -94,6 +92,7 @@ suitable_indices = [i for i in range(len(idx_to_word)) if idx_to_word[i].isalpha
 
 print('Loaded word embeddings ({0} words; {1} suitable).'.format(len(idx_to_word), len(suitable_indices)))
 
+# Initialize models and start training
 decoder = CharRNN(
     torch.Tensor(word_vectors),
     n_characters,
@@ -118,6 +117,8 @@ try:
     training_inds = suitable_indices        # TODO implement bottleneck
 
     for epoch in tqdm(range(1, args.n_epochs + 1)):
+        # TODO epochs != iterations
+        # TODO make sure ALL training_inds are covered (to avoid inevitable learning bottleneck).
         loss = train(*random_training_set(training_inds, args.batch_size))
         loss_avg += loss
 
@@ -127,6 +128,8 @@ try:
             predictions = generate(decoder, preview_inds, predict_len=20, cuda=not args.no_cuda)        # temperature=args.gen_temp,
             for i, pred in zip(preview_inds, predictions):
                 print(idx_to_word[i], pred[1:].split('<')[0])
+
+            # TODO implement evaluation measures
 
     print("Saving...")
     save()
