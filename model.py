@@ -5,13 +5,18 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 class CharRNN(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, model="gru", n_layers=1):
+    def __init__(self, seed, input_size, hidden_size, output_size, model="gru", n_layers=1):
         super(CharRNN, self).__init__()
         self.model = model.lower()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.n_layers = n_layers
+
+        self.seed = nn.Embedding(seed.shape[0], seed.shape[1])
+        self.seed.weight.data = torch.from_numpy(seed)
+        seed.weight.requires_grad = False
+        # Verify that this thing remains fixed during training.
 
         self.encoder = nn.Embedding(input_size, hidden_size)
         if self.model == "gru":
