@@ -72,7 +72,10 @@ def save():
 
 # Initialize models and start training
 
+seed_embedding = None        # TODO load Word2Vec
+
 decoder = CharRNN(
+    seed_embedding,
     n_characters,
     args.hidden_size,
     n_characters,
