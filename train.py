@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # https://github.com/spro/char-rnn.pytorch
 
+import distance
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -20,11 +22,11 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument('filename', type=str)
 argparser.add_argument('--model', type=str, default="gru")
 argparser.add_argument('--n_epochs', type=int, default=10000)
-argparser.add_argument('--print_every', type=int, default=100)
+argparser.add_argument('--print_every', type=int, default=50)
 argparser.add_argument('--hidden_size', type=int, default=400)
 argparser.add_argument('--n_layers', type=int, default=2)
 argparser.add_argument('--learning_rate', type=float, default=0.001)
-argparser.add_argument('--batch_size', type=int, default=1000)
+argparser.add_argument('--batch_size', type=int, default=100)
 # argparser.add_argument('--gen_temp', type=int, default=.1)
 argparser.add_argument('--max_words', type=int, default=10000)
 argparser.add_argument('--shuffle', action='store_true')
@@ -33,6 +35,7 @@ args = argparser.parse_args()
 
 # TODO Implement config_utils for random hyperparameter search on cluster.
 # TODO Add hyperparameter to feed word embedding at every decoder step.
+# TODO I can test bootstrapping hypotheses, slowly increasing set of words, ...
 
 if not args.no_cuda:
     print("Using CUDA")
@@ -86,9 +89,9 @@ def save():
     print('Saved as %s' % save_filename)
 
 # word_vectors = np.load('friends.train.scene_delim__GoogleNews-vectors-negative300.npy')[1:]
-pretrained = np.genfromtxt('glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False, max_rows=None if args.max_words == -1 else args.max_words)
+pretrained = np.genfromtxt('glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False, max_rows=args.max_words)
 idx_to_word = pretrained[:,0]
-word_to_idx = {i: idx_to_word[i] for i in range(len(idx_to_word))}
+word_to_idx = {idx_to_word[i]: i for i in range(len(idx_to_word))}
 word_vectors = pretrained[:,1:].astype(float)
 
 suitable_indices = [i for i in range(len(idx_to_word)) if idx_to_word[i].isalpha()]
@@ -119,18 +122,49 @@ try:
 
     training_inds = suitable_indices        # TODO implement bottleneck
 
-    for epoch in tqdm(range(1, args.n_epochs + 1)):
+    for epoch in range(1, args.n_epochs + 1):
         # TODO epochs != iterations
         # TODO make sure ALL training_inds are covered (to avoid inevitable learning bottleneck).
         loss = train(*random_training_set(training_inds, args.batch_size))
         loss_avg += loss
 
         if epoch % args.print_every == 0:
-            preview_inds = training_inds[150:200]
-            print('[%s (%d %d%%) %.4f]' % (time_since(start), epoch, epoch / args.n_epochs * 100, loss))
+
+            preview_inds = training_inds[0:100]
+
             predictions = generate(decoder, preview_inds, predict_len=20, cuda=not args.no_cuda)        # temperature=args.gen_temp,
+            predictions = [pred[1:].split('<')[0] for pred in predictions]
+            str_sims = []
+            sem_sims = []
+            com_accs = []
+
             for i, pred in zip(preview_inds, predictions):
-                print(idx_to_word[i], pred[1:].split('<')[0])
+                str_sim = 1.0 - (distance.levenshtein(idx_to_word[i], pred) / max(len(idx_to_word[i]), len(pred)))
+
+                if str_sim == 1:
+                    sem_sim = 1
+                else:
+                    j = word_to_idx.get(pred)
+                    if j is None:
+                        sem_sim = 0
+                    else:
+                        sem_sim = torch.nn.functional.cosine_similarity(decoder.seed.weight[i], decoder.seed.weight[j], dim=0).item()
+
+                com_acc = max(str_sim, sem_sim)     # TODO Make smarter, e.g., semantic closeness of closest string(s).
+
+                str_sims.append(str_sim)
+                sem_sims.append(sem_sim)
+                com_accs.append(com_acc)
+
+
+                # if sem_sim < 1.0 and sem_sim > 0.0:
+                #     print('{0} {1} ({2:.2f}, {3:.2f})'.format(idx_to_word[i], pred, str_sim, sem_sim))
+
+            avg_str_sim = sum(str_sims)/len(str_sims)
+            avg_sem_sim = sum(sem_sims) / len(sem_sims)
+            avg_com_acc = sum(com_accs) / len(com_accs)
+
+            print('[%s (%d %d%%) %.4f %.2f %.2f %.2f]' % (time_since(start), epoch, epoch / args.n_epochs * 100, loss, avg_str_sim, avg_sem_sim, avg_com_acc))
 
             # TODO implement evaluation measures, mainly: semantic & typographical similarity of target-prediction, expressiveness/distinguishability, compositionality
 
