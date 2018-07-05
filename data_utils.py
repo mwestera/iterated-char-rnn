@@ -6,6 +6,9 @@ from sklearn.datasets import make_blobs
 from sklearn.cluster import KMeans
 import torch
 
+import distance
+import math
+
 import os
 import pickle
 import pandas as pd
