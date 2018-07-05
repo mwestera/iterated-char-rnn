@@ -58,6 +58,7 @@ class CharRNN(nn.Module):
 
     def generate(self, word_ids, prime_str='>', predict_len=20, cuda=True):
         # TODO Obtain CUDA from self.
+        # TODO redundancies here wrt model_utils.
 
         n_words = len(word_ids)
 
