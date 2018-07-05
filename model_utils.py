@@ -5,12 +5,14 @@ import torch.optim as optim
 import torch.autograd as autograd
 import numpy as np
 import data_utils
+import distance
+
 import warnings
 from sklearn.metrics import accuracy_score, f1_score
 
 
 # TODO @Future: include in logs precision and recall.
-def train(model, inputs, targets, indices, val_inputs, val_targets, settings, no_shuffle, logger):
+def train(model, inputs, targets, indices, val_inputs, val_targets, idx_to_word, word_to_idx, word_vectors, settings, no_shuffle, logger):
     """
     Trains a model on training data X, y, testing on validation data,
     with various settings given by args. If no validation set is given,
@@ -89,118 +91,84 @@ def train(model, inputs, targets, indices, val_inputs, val_targets, settings, no
         # Every N epochs, collect performance loggerstatistics:
         if (epoch + 1) % settings.test_every == 0:
 
+            test_indices = indices      # TODO restrict
+
             model.eval()
 
             # Reserve a dictionary to store the various results in
-            perf_measures = {"loss": -1, "total": -1, "accuracy": -1,
-                             "macro_f1_score": -1, "macro_f1_score_main": -1, 'f1_scores': None}
             performance = {"epoch": epoch, "iteration": iteration,
-                           "training": perf_measures,
-                           "validation": perf_measures.copy()}
+                           "training": None,
+                           "validation": None}
 
             # Obtain predictions and loss on training data; predictions are in order.
-            train_predictions, train_mean_loss = get_predictions_and_mean_loss(model,
-                                                                               inputs,
-                                                                               targets,
-                                                                               indices[0:100],
-                                                                               batch_size=settings.batch_size,
-                                                                               loss_function=loss_function)
+            train_predictions = np.array(get_predictions(model, test_indices, batch_size=settings.batch_size))
 
             # Get all scores and insert them into the dictionary
-            train_scores = get_scores(train_predictions, targets)
-            performance["training"].update(train_scores)
-            performance["training"]["loss"] = train_mean_loss
+            performance["training"] = get_scores(train_predictions, test_indices, idx_to_word, word_to_idx, word_vectors)
 
             # Also keep track of the relative performance increase/decrease:
-            f1_diff_train = performance["training"]["macro_f1_score"] - prev_train_score
-            prev_train_score = performance["training"]["macro_f1_score"]
-
-            # To avoid None error during training if without crossvalidation (no validation data).
-            val_mean_loss = train_mean_loss
+            # TODO keep track of difference
+            # f1_diff_train = performance["training"]["macro_f1_score"] - prev_train_score
+            # prev_train_score = performance["training"]["macro_f1_score"]
 
             # And do the same for validation data:
-            if use_validation_data:
-                val_predictions, val_mean_loss = get_predictions_and_mean_loss(model,
-                                                                               val_inputs,
-                                                                               val_targets,
-                                                                               batch_size=settings.batch_size,
-                                                                               loss_function=loss_function)
-
-                val_scores = get_scores(val_predictions, val_targets)
-                performance["validation"].update(val_scores)
-                performance["validation"]["loss"] = val_mean_loss
-
-            f1_diff_val = performance[stop_criterion_data]["macro_f1_score"] - prev_val_score
-            prev_val_score = performance[stop_criterion_data]["macro_f1_score"]
+            # TODO validation
+            # if use_validation_data:
+            #     val_predictions, val_mean_loss = get_predictions(model, val_inputs, val_targets, batch_size=settings.batch_size)
+            #
+            #     val_scores = get_scores(val_predictions, val_targets)
+            #     performance["validation"].update(val_scores)
+            #     performance["validation"]["loss"] = val_mean_loss
+            #     f1_diff_val = performance[stop_criterion_data]["macro_f1_score"] - prev_val_score
+            #     prev_val_score = performance[stop_criterion_data]["macro_f1_score"]
 
             # Print the various scores
-            logger.say('Mean loss: \n  training: {0:12.7f}\n  validation: {1:10.7f}'.format(train_mean_loss, val_mean_loss))
-            logger.say('Accuracy: \n  training: {0[training][accuracy]:12.4f} (total {0[training][total]:7d})\n  validation: {0[validation][accuracy]:10.4f} (total {0[validation][total]:7d})'.format(performance))
-            logger.say('Macro F1: \n  training: {0[training][macro_f1_score]:12.4f}   dif.: {1:.5f}   (total {0[training][total]:7d})\n  validation: {0[validation][macro_f1_score]:10.4f}   dif.: {2:.5f}   (total {0[validation][total]:7d})\n'.format(performance, f1_diff_train, f1_diff_val))
-
+            # logger.say(performance)
             # Keep track of best performance, and assess whether to stop training
-            if (val_mean_loss < min_val_loss or
-                    (performance[stop_criterion_data]["macro_f1_score"] > max_val_macro_f1) or
-                    (performance['training']["macro_f1_score"] > max_train_macro_f1)):    # i.e., if the model is improving.
-                num_epochs_no_improve = 0
-                best_model = model
-                min_val_loss = min(val_mean_loss, min_val_loss)
-                max_val_macro_f1 = max(performance[stop_criterion_data]["macro_f1_score"], max_val_macro_f1)
-                max_train_macro_f1 = max(performance['training']["macro_f1_score"], max_train_macro_f1)
-            else:                               # i.e., if the model is NOT improving.
-                num_epochs_no_improve += settings.test_every
+            # TODO stop criterion
+            # if (val_mean_loss < min_val_loss or
+            #         (performance[stop_criterion_data]["macro_f1_score"] > max_val_macro_f1) or
+            #         (performance['training']["macro_f1_score"] > max_train_macro_f1)):    # i.e., if the model is improving.
+            #     num_epochs_no_improve = 0
+            #     best_model = model
+            #     min_val_loss = min(val_mean_loss, min_val_loss)
+            #     max_val_macro_f1 = max(performance[stop_criterion_data]["macro_f1_score"], max_val_macro_f1)
+            #     max_train_macro_f1 = max(performance['training']["macro_f1_score"], max_train_macro_f1)
+            # else:                               # i.e., if the model is NOT improving.
+            #     num_epochs_no_improve += settings.test_every
+            #
+            # if num_epochs_no_improve >= settings.stop_criterion or np.isnan(val_mean_loss):
+            #     message = 'Stopped after epoch {0} because validation loss nor train/validation performance improved for {1} epochs, or validation loss is Nan.'.format(
+            #         epoch, num_epochs_no_improve)
+            #     logger.say(message)
+            #     logger.log('# ' + message)
+            #     break
 
-            if num_epochs_no_improve >= settings.stop_criterion or np.isnan(val_mean_loss):
-                message = 'Stopped after epoch {0} because validation loss nor train/validation performance improved for {1} epochs, or validation loss is Nan.'.format(
-                    epoch, num_epochs_no_improve)
-                logger.say(message)
-                logger.log('# ' + message)
-                break
-
-        logger.log(performance)
+            logger.log(performance)
 
         epoch += 1
 
     return model, best_model
 
 
-def get_predictions_and_mean_loss(model, inputs, targets, indices, batch_size=100, loss_function=None, shuffle=True):
+def get_predictions(model, indices, batch_size=100, shuffle=True):
 
     model.eval()
     predictions = []
-    weighted_loss = 0
-    total_weight = 0
 
     for batch_indices in data_utils.batches(indices, batch_size, shuffle=shuffle):
-
-        model.init_hidden(len(batch_indices))
 
         with torch.no_grad():
 
             batch_outputs = model.generate(batch_indices, predict_len=20)
             preds = [pred[1:].split('<')[0] for pred in batch_outputs]
 
-            print(preds)
-
-        if loss_function is not None:
-            # weight = batch_targets.nelement()
-            # loss = loss_function(batch_outputs.view(-1, batch_outputs.size()[-1]), batch_targets_var.view(-1))
-            # loss = loss.item()
-            loss, weight = 1, 1    # TODO
-            weighted_loss += weight * loss
-            total_weight += weight
-
         predictions.extend(preds)
 
-    if loss_function is None:
-        return predictions
-
-    avg_loss = weighted_loss / total_weight
-
-    return predictions, avg_loss
+    return predictions
 
 
-def get_scores(predictions, targets):
+def get_scores(predictions, indices, idx_to_word, word_to_idx, word_vectors):
     """
     Computes prediction accuracy, F1 scores for all/main entities, macro average of F1 scores for all/main entities.
     :param predictions: list of predicted labels
@@ -210,12 +178,42 @@ def get_scores(predictions, targets):
     """
     # TODO @Future: More of this could be done on gpu (e.g.: https://www.kaggle.com/igormq/f-beta-score-for-pytorch/code )
 
-    all_scores = {}
+    str_sims = []
+    sem_sims = []
+    com_accs = []
 
-    # Return appropriately named scores:
-    all_scores.update({'accuracy': 0,
-                       'macro_f1_score': 0,
-                       'total': len(targets),
-                       })
+    for i, pred in zip(indices, predictions):
+        str_sim = 1.0 - (distance.levenshtein(idx_to_word[i], pred) / max(len(idx_to_word[i]), len(pred)))
+
+        if str_sim == 1:
+            sem_sim = 1
+        else:
+            j = word_to_idx.get(pred)
+            if j is None:
+                sem_sim = 0
+            else:
+                sem_sim = torch.nn.functional.cosine_similarity(torch.from_numpy(word_vectors[i]).cuda(), torch.from_numpy(word_vectors[j]).cuda(), dim=0).item()
+
+        com_acc = max(str_sim, sem_sim)  # TODO Make smarter, e.g., semantic closeness of closest string(s).
+
+        str_sims.append(str_sim)
+        sem_sims.append(sem_sim)
+        com_accs.append(com_acc)
+
+        # if sem_sim < 1.0 and sem_sim > 0.0:
+        #     print('{0} {1} ({2:.2f}, {3:.2f})'.format(idx_to_word[i], pred, str_sim, sem_sim))
+
+    avg_str_sim = sum(str_sims) / len(str_sims)
+    avg_sem_sim = sum(sem_sims) / len(sem_sims)
+    avg_com_acc = sum(com_accs) / len(com_accs)
+
+    # avg_inter_str_dist, avg_inter_sem_dist, comp = correlation(decoder.seed.weight, predictions,
+    #                                                            preview_inds)  # TODO not feasible to do for all words; reuse the semantic one.
+
+    all_scores = {'acc': (idx_to_word[indices] == predictions).mean(),
+                  'avg_str_sim': avg_str_sim,
+                  'avg_sem_sim': avg_sem_sim,
+                  'avg_com_acc': avg_com_acc,
+                  'total': len(indices)}
 
     return all_scores

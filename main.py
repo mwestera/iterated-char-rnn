@@ -93,7 +93,7 @@ def run_training(settings, idx_to_word, word_to_idx, word_vectors, training_ids,
         # val_targets = val_targets.cuda()
 
     # Train the model
-    last_model, best_model = model_utils.train(model, inputs, targets, training_ids, [], [], settings.training,
+    last_model, best_model = model_utils.train(model, inputs, targets, training_ids, [], [], idx_to_word, word_to_idx, word_vectors, settings.training,
                                                settings.training.no_shuffle, logger=logger)
 
     # Save the best model through the logger
