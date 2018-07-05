@@ -96,15 +96,15 @@ def train(model, inputs, targets, indices, val_inputs, val_targets, idx_to_word,
             model.eval()
 
             # Reserve a dictionary to store the various results in
-            performance = {"epoch": epoch, "iteration": iteration,
-                           "training": None,
-                           "validation": None}
+            performance = {"epoch": epoch, "iteration": iteration,}
+                           # "training": None,
+                           # "validation": None}
 
             # Obtain predictions and loss on training data; predictions are in order.
-            train_predictions = np.array(get_predictions(model, test_indices, batch_size=settings.batch_size))
+            train_predictions = np.array(get_predictions(model, test_indices, batch_size=settings.batch_size, shuffle=False))
 
             # Get all scores and insert them into the dictionary
-            performance["training"] = get_scores(train_predictions, test_indices, idx_to_word, word_to_idx, word_vectors)
+            performance.update(get_scores(train_predictions, test_indices, idx_to_word, word_to_idx, word_vectors))
 
             # Also keep track of the relative performance increase/decrease:
             # TODO keep track of difference
@@ -177,6 +177,9 @@ def get_scores(predictions, indices, idx_to_word, word_to_idx, word_vectors):
     :return: dictionary of all scores
     """
     # TODO @Future: More of this could be done on gpu (e.g.: https://www.kaggle.com/igormq/f-beta-score-for-pytorch/code )
+
+    for i, ind in enumerate(indices[100:200]):
+        print(idx_to_word[ind].ljust(18), predictions[i+100].ljust(18))
 
     str_sims = []
     sem_sims = []
