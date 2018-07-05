@@ -88,6 +88,43 @@ def save():
     torch.save(decoder, save_filename)
     print('Saved as %s' % save_filename)
 
+
+def correlation(word_vectors, strings=None, word_ids=None):
+    if word_ids is None:
+        word_ids = list(range(len(word_vectors)))
+        if strings is None:
+            strings = [idx_to_word[i] for i in word_ids]
+
+    n_words = len(word_ids)
+
+    inter_str_dist = np.zeros((n_words, n_words)) - 1
+    inter_sem_dist = np.zeros((n_words, n_words)) - 1
+    for i in range(n_words):
+        for j in range(n_words):
+            if i < j:
+                inter_str_dist[i, j] = distance.levenshtein(strings[i], strings[j]) / max(len(strings[i]), len(strings[j]))
+                inter_sem_dist[i, j] = 1.0 - torch.nn.functional.cosine_similarity(word_vectors[word_ids[i]],
+                                                                                   word_vectors[word_ids[j]],
+                                                                                   dim=0).item()
+    avg_inter_sem_dist = np.average(inter_sem_dist[inter_sem_dist >= 0])
+    avg_inter_str_dist = np.average(inter_str_dist[inter_str_dist >= 0])
+
+    sum_difs_sem_str = 0
+    sum_sq_difs_sem = 0
+    sum_sq_difs_str = 0
+    for i in range(n_words):
+        for j in range(n_words):
+            if i < j:
+                sum_difs_sem_str += (inter_sem_dist[i, j] - avg_inter_sem_dist) * (
+                        inter_str_dist[i, j] - avg_inter_str_dist)
+                sum_sq_difs_sem += (inter_sem_dist[i, j] - avg_inter_sem_dist) ** 2
+                sum_sq_difs_str += (inter_str_dist[i, j] - avg_inter_str_dist) ** 2
+
+    comp = sum_difs_sem_str / math.sqrt(sum_sq_difs_sem * sum_sq_difs_str)
+
+    return avg_inter_str_dist, avg_inter_sem_dist, comp
+
+
 # word_vectors = np.load('friends.train.scene_delim__GoogleNews-vectors-negative300.npy')[1:]
 pretrained = np.genfromtxt('glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False, max_rows=args.max_words)
 idx_to_word = pretrained[:,0]
@@ -117,6 +154,9 @@ start = time.time()
 all_losses = []
 loss_avg = 0
 
+avg_inter_str_dist, avg_inter_sem_dist, comp = correlation(decoder.seed.weight, idx_to_word[:500], word_ids=list(range(500)))
+print('correlation of top 1000 words:', avg_inter_str_dist, avg_inter_sem_dist, comp)
+
 try:
     print("Training for %d epochs..." % args.n_epochs)
 
@@ -132,6 +172,7 @@ try:
 
             preview_inds = training_inds[0:100]
 
+            # TODO Go through preview inds in batches in case it's too many.
             predictions = generate(decoder, preview_inds, predict_len=20, cuda=not args.no_cuda)        # temperature=args.gen_temp,
             predictions = [pred[1:].split('<')[0] for pred in predictions]
             str_sims = []
@@ -160,13 +201,16 @@ try:
                 # if sem_sim < 1.0 and sem_sim > 0.0:
                 #     print('{0} {1} ({2:.2f}, {3:.2f})'.format(idx_to_word[i], pred, str_sim, sem_sim))
 
-            avg_str_sim = sum(str_sims)/len(str_sims)
+            avg_str_sim = sum(str_sims) / len(str_sims)
             avg_sem_sim = sum(sem_sims) / len(sem_sims)
             avg_com_acc = sum(com_accs) / len(com_accs)
 
-            print('[%s (%d %d%%) %.4f %.2f %.2f %.2f]' % (time_since(start), epoch, epoch / args.n_epochs * 100, loss, avg_str_sim, avg_sem_sim, avg_com_acc))
+            avg_inter_str_dist, avg_inter_sem_dist, comp = correlation(decoder.seed.weight, predictions, preview_inds)  # TODO not feasible to do for all words; reuse the semantic one.
 
-            # TODO implement evaluation measures, mainly: semantic & typographical similarity of target-prediction, expressiveness/distinguishability, compositionality
+            print('[{0} ({1} {2:.1f}%) {3:.4f}  [{4:.2f} {5:.2f} {6:.2f}]  [{7:.2f} {8:.2f} {9:.2f}]]'.format(
+                time_since(start), epoch, epoch / args.n_epochs * 100, loss,
+                avg_str_sim, avg_sem_sim, avg_com_acc,
+                avg_inter_str_dist, avg_inter_sem_dist, comp))
 
     print("Saving...")
     save()
