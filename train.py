@@ -126,7 +126,7 @@ def correlation(word_vectors, strings=None, word_ids=None):
 
 
 # word_vectors = np.load('friends.train.scene_delim__GoogleNews-vectors-negative300.npy')[1:]
-pretrained = np.genfromtxt('glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False, max_rows=args.max_words)
+pretrained = np.genfromtxt('data/glove.6B/glove.6B.50d.txt', delimiter=' ', dtype=str, invalid_raise=False, max_rows=args.max_words)
 idx_to_word = pretrained[:,0]
 word_to_idx = {idx_to_word[i]: i for i in range(len(idx_to_word))}
 word_vectors = pretrained[:,1:].astype(float)
