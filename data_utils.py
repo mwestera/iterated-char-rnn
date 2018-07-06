@@ -140,20 +140,27 @@ def random_word(min_len, max_len):
 
 def get_data(settings, stats=True):
 
-    if settings.dataset == 'random':
-
-        num_words = settings.max_words
-        idx_to_word = np.array([random_word(settings.min_len, settings.max_len) for _ in range(num_words)])
-        word_vectors = 2 * np.random.rand(num_words, settings.num_dims) - 1      # uniform in -1,1
-        sigmoid = lambda x: 1 / (1 + np.exp(-3 * x))       # 3 controls how polarizing it is.  # TODO better distribution? Blobs perhaps?
-        word_vectors = sigmoid(word_vectors)
-
-    else:
+    if os.path.exists(settings.dataset):
 
         pretrained = np.genfromtxt(settings.dataset, delimiter=' ', dtype=str, invalid_raise=False,
                                    max_rows=settings.max_words)
         idx_to_word = pretrained[:, 0]
         word_vectors = pretrained[:, 1:].astype(float)
+
+    else:
+
+        datapath = os.path.join('data', settings.dataset + '.txt')
+
+        num_words = settings.max_words
+        idx_to_word = np.array([random_word(settings.min_len, settings.max_len) for _ in range(num_words)])
+        word_vectors = 2 * np.random.rand(num_words, settings.num_dims) - 1      # uniform in -1,1
+        sigmoid = lambda x: 1 / (1 + np.exp(-3 * x))       # 3 controls how polarizing it is.  # TODO better distribution? Blobs perhaps?
+        word_vectors = 2 * sigmoid(word_vectors) - 1
+
+        with open(datapath, 'w') as file:
+            for i in range(num_words):
+                file.write(idx_to_word[i] + ' ' + ' '.join(['{0:.5f}'.format(v) for v in word_vectors[i]]) + '\n')
+
 
     suitable_indices = np.array([i for i in range(len(idx_to_word)) if idx_to_word[i].isalpha()])
 
