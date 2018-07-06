@@ -16,8 +16,12 @@ import pandas as pd
 import random
 
 
-all_characters = '>' + '<' + string.ascii_letters
+all_characters = '>' + '<' + string.ascii_lowercase
 n_characters = len(all_characters)
+
+
+vowels = "aeiou"
+consonants = "".join(set(string.ascii_lowercase) - set(vowels))
 
 
 def _sort_sequence(y):
@@ -122,12 +126,39 @@ def create_data_in_domains(settings, compute_k_means=False):
     return data
 
 
+def random_word(min_len, max_len):
+    length = int(round(random.betavariate(2,8) * (max_len - min_len) + min_len))
+    word = ""
+    for i in range(length):
+        if i % 2 == 0:
+            word += random.choice(consonants)
+        else:
+            word += random.choice(vowels)
+
+    return word
+
+
 def get_data(settings, stats=True):
 
-    pretrained = np.genfromtxt(settings.dataset, delimiter=' ', dtype=str, invalid_raise=False,
-                               max_rows=settings.max_words)
-    idx_to_word = pretrained[:, 0]
-    word_vectors = pretrained[:, 1:].astype(float)
+    if settings.dataset == 'random':
+
+        min_len = 3
+        max_len = 18
+
+        num_words = settings.max_words
+        num_dims = 50
+
+        idx_to_word = np.array([random_word(min_len, max_len) for _ in range(num_words)])
+        word_vectors = 2 * np.random.rand(num_words, num_dims) - 1      # uniform in -1,1
+        sigmoid = lambda x: 1 / (1 + np.exp(-3 * x))       # 3 controls how polarizing it is.  # TODO better distribution? Blobs perhaps?
+        word_vectors = sigmoid(word_vectors)
+
+    else:
+
+        pretrained = np.genfromtxt(settings.dataset, delimiter=' ', dtype=str, invalid_raise=False,
+                                   max_rows=settings.max_words)
+        idx_to_word = pretrained[:, 0]
+        word_vectors = pretrained[:, 1:].astype(float)
 
     suitable_indices = np.array([i for i in range(len(idx_to_word)) if idx_to_word[i].isalpha()])
 
@@ -137,8 +168,6 @@ def get_data(settings, stats=True):
     word_vectors = word_vectors[suitable_indices]
 
     word_to_idx = {idx_to_word[i]: i for i in range(len(idx_to_word))}
-
-    # TODO Add artificial dataset possibility
 
     if stats:
         avg_inter_str_dist, avg_inter_sem_dist, comp = correlation(word_vectors, idx_to_word, idx_to_word[:500],
