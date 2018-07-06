@@ -127,7 +127,7 @@ def create_data_in_domains(settings, compute_k_means=False):
 
 
 def random_word(min_len, max_len):
-    length = int(round(random.betavariate(2,8) * (max_len - min_len) + min_len))
+    length = int(round(random.betavariate(3,8) * (max_len - min_len) + min_len))
     word = ""
     for i in range(length):
         if i % 2 == 0:
@@ -142,14 +142,9 @@ def get_data(settings, stats=True):
 
     if settings.dataset == 'random':
 
-        min_len = 3
-        max_len = 18
-
         num_words = settings.max_words
-        num_dims = 50
-
-        idx_to_word = np.array([random_word(min_len, max_len) for _ in range(num_words)])
-        word_vectors = 2 * np.random.rand(num_words, num_dims) - 1      # uniform in -1,1
+        idx_to_word = np.array([random_word(settings.min_len, settings.max_len) for _ in range(num_words)])
+        word_vectors = 2 * np.random.rand(num_words, settings.num_dims) - 1      # uniform in -1,1
         sigmoid = lambda x: 1 / (1 + np.exp(-3 * x))       # 3 controls how polarizing it is.  # TODO better distribution? Blobs perhaps?
         word_vectors = sigmoid(word_vectors)
 
