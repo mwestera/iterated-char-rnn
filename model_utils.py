@@ -45,14 +45,9 @@ def train(model, inputs, targets, indices, val_inputs, val_targets, idx_to_word,
     # Variables for bookkeeping during training
     epoch = -1  # Start at -1 in order to compute pre-training scores.
     iteration = 0
-    min_val_loss = 1000.0
-    max_val_macro_f1 = -1.0
-    max_train_macro_f1 = -1.0
+    best_com_acc = 0
     best_model = model
-    prev_val_score = 0.0
-    prev_train_score = 0.0
     num_epochs_no_improve = 0
-    stop_criterion_data = "validation" if use_validation_data else "training"
 
     while epoch < settings.epochs:
 
@@ -106,6 +101,8 @@ def train(model, inputs, targets, indices, val_inputs, val_targets, idx_to_word,
             # Get all scores and insert them into the dictionary
             performance.update(get_scores(train_predictions, test_indices, idx_to_word, word_to_idx, word_vectors))
 
+            logger.log(performance)
+
             # Also keep track of the relative performance increase/decrease:
             # TODO keep track of difference
             # f1_diff_train = performance["training"]["macro_f1_score"] - prev_train_score
@@ -125,26 +122,18 @@ def train(model, inputs, targets, indices, val_inputs, val_targets, idx_to_word,
             # Print the various scores
             # logger.say(performance)
             # Keep track of best performance, and assess whether to stop training
-            # TODO stop criterion
-            # if (val_mean_loss < min_val_loss or
-            #         (performance[stop_criterion_data]["macro_f1_score"] > max_val_macro_f1) or
-            #         (performance['training']["macro_f1_score"] > max_train_macro_f1)):    # i.e., if the model is improving.
-            #     num_epochs_no_improve = 0
-            #     best_model = model
-            #     min_val_loss = min(val_mean_loss, min_val_loss)
-            #     max_val_macro_f1 = max(performance[stop_criterion_data]["macro_f1_score"], max_val_macro_f1)
-            #     max_train_macro_f1 = max(performance['training']["macro_f1_score"], max_train_macro_f1)
-            # else:                               # i.e., if the model is NOT improving.
-            #     num_epochs_no_improve += settings.test_every
-            #
-            # if num_epochs_no_improve >= settings.stop_criterion or np.isnan(val_mean_loss):
-            #     message = 'Stopped after epoch {0} because validation loss nor train/validation performance improved for {1} epochs, or validation loss is Nan.'.format(
-            #         epoch, num_epochs_no_improve)
-            #     logger.say(message)
-            #     logger.log('# ' + message)
-            #     break
+            if performance['avg_com_acc'] > best_com_acc:    # i.e., if the model is improving.
+                num_epochs_no_improve = 0
+                best_model = model
+                best_com_acc = performance['avg_com_acc']
+            else:                               # i.e., if the model is NOT improving.
+                num_epochs_no_improve += settings.test_every
 
-            logger.log(performance)
+            if num_epochs_no_improve >= settings.stop_criterion:
+                message = 'Stopped after epoch {0} because com acc did not improve for {1} epochs.'.format(epoch, num_epochs_no_improve)
+                logger.say(message)
+                logger.log('# ' + message)
+                break
 
         epoch += 1
 
