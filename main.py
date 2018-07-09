@@ -34,7 +34,36 @@ def main():
     if args.phase == 'train':
         logger.save_config(settings.orig)
         logger.say(output_utils.bcolors.BOLD + 'Training on ' + settings.data.dataset)
-        run_training(settings, idx_to_word, word_to_idx, word_vectors, np.arange(len(idx_to_word)), logger, not args.no_cuda)
+
+        reproduction_command = 'python main.py ' + '-c ' + os.path.join(logger.log_dir, logger.run_name + '.ini')
+        logger.shout(reproduction_command)
+        logger.log('# ' + reproduction_command)
+        logger.log(
+            'epoch\titeration\tfold\ttrain_loss\ttrain_acc\ttrain_macro_f1\ttrain_macro_f1_main\ttrain_total\tval_loss\tval_acc\tval_macro_f1\tval_macro_f1_main\tval_total\tmodel')
+
+        if settings.data.generations > 1:
+            logger.generation = 'START'
+            logger.save_word_vectors(idx_to_word, word_vectors)  # Save duplicate of the data on which the first model will be trained
+
+        for i in range(settings.data.generations):
+
+            print("Generation", i)
+
+            logger.generation = i
+
+            bottleneck = round(settings.training.bottleneck * len(idx_to_word))
+            training_ids = np.random.choice(np.arange(len(idx_to_word)), bottleneck, replace=False, p=None)
+
+            best_model = run_training(settings, idx_to_word, word_to_idx, word_vectors, training_ids, logger, not args.no_cuda)
+
+            predictions = model_utils.get_predictions(best_model, np.arange(len(idx_to_word)),
+                                                      batch_size=settings.training.batch_size, shuffle=False)
+
+            # for next generation:
+            idx_to_word = np.array(predictions)
+            word_to_idx = {idx_to_word[i]: i for i in range(len(idx_to_word))}
+            logger.save_word_vectors(idx_to_word, word_vectors)     # Save the data on which the next model will be trained
+
 
     if args.phase == 'deploy':
         logger.say(output_utils.bcolors.BOLD + 'Deploying ' + str(len(args.model)) + ' models (' + (
@@ -53,11 +82,6 @@ def main():
 
 
 def run_training(settings, idx_to_word, word_to_idx, word_vectors, training_ids, logger, use_cuda):
-    
-    reproduction_command = 'python main.py ' + '-c ' + os.path.join(logger.log_dir, logger.run_name + '.ini')
-    logger.shout(reproduction_command)
-    logger.log('# ' + reproduction_command)
-    logger.log('epoch\titeration\tfold\ttrain_loss\ttrain_acc\ttrain_macro_f1\ttrain_macro_f1_main\ttrain_total\tval_loss\tval_acc\tval_macro_f1\tval_macro_f1_main\tval_total\tmodel')
 
     inputs, targets = data_utils.to_char_tensors(idx_to_word)
 
@@ -98,6 +122,8 @@ def run_training(settings, idx_to_word, word_to_idx, word_vectors, training_ids,
 
     # Save the best model through the logger
     logger.save_model(best_model)
+
+    return best_model
 
 
 def run_deploy(model_path, settings, data_path, answers_per_fold, no_cv, logger, use_cuda):
@@ -284,6 +310,7 @@ def parse_args_and_settings():
                         help="Prevents generation of folders and files (log, model, answer).")
     parser.add_argument("--stats", action='store_true',
                         help="Whether to printout k-means 'gold standard' for some of the clusterings.")
+    parser.add_argument('-i', "--iterate", action='store_true')
 
     args = parser.parse_args()
 
