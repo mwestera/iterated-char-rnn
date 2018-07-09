@@ -157,9 +157,7 @@ def get_data(settings, stats=True):
         sigmoid = lambda x: 1 / (1 + np.exp(-3 * x))       # 3 controls how polarizing it is.  # TODO better distribution? Blobs perhaps?
         word_vectors = 2 * sigmoid(word_vectors) - 1
 
-        with open(datapath, 'w') as file:
-            for i in range(num_words):
-                file.write(idx_to_word[i] + ' ' + ' '.join(['{0:.5f}'.format(v) for v in word_vectors[i]]) + '\n')
+        save_word_vectors(idx_to_word, word_vectors, datapath)
 
 
     suitable_indices = np.array([i for i in range(len(idx_to_word)) if idx_to_word[i].isalpha()])
@@ -179,6 +177,11 @@ def get_data(settings, stats=True):
 
     return idx_to_word, word_to_idx, word_vectors
 
+
+def save_word_vectors(idx_to_word, word_vectors, datapath):
+    with open(datapath, 'w') as file:
+        for i in range(len(idx_to_word)):
+            file.write(idx_to_word[i] + ' ' + ' '.join(['{0:.5f}'.format(v) for v in word_vectors[i]]) + '\n')
 
 def to_char_tensors(idx_to_word):
     word_ids = torch.arange(len(idx_to_word)).int()
