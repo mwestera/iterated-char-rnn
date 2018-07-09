@@ -2,6 +2,7 @@ import re
 import torch
 import os
 import config_utils
+import data_utils
 
 class bcolors:
     HEADER = '\033[95m'
@@ -22,27 +23,34 @@ class Logger:
         self.run_name = args.run_name
         self.no_files = args.no_files
         self.verbose = args.verbosity
+        self.generation = -1
 
         # Directory structure
         if args.model_dir is not None:
             self.model_dir = os.path.join(args.model_dir, args.subdir)
             self.log_dir = os.path.join(self.model_dir, 'logs')
             self.answer_dir = os.path.join(self.model_dir, 'answers')
+            self.data_dir = os.path.join(self.model_dir, 'data')
 
         if not self.no_files:
             if args.phase == 'train':
                 os.makedirs(self.model_dir, exist_ok=True)
                 os.makedirs(self.log_dir, exist_ok=True)
+                os.makedirs(self.data_dir, exist_ok=True)
             elif args.phase == 'deploy':
                 os.makedirs(self.answer_dir, exist_ok=True)
 
         # Bookkeeping during training, to be overwritten:
         self.fold_idx = -1
 
+    def save_word_vectors(self, word_to_idx, word_vectors):
+
+        data_utils.save_word_vectors(word_to_idx, word_vectors, os.path.join(self.data_dir, self.run_name + '__' + str(self.generation) + '.txt'))
+
     def save_model(self, model, suffix=""):
         if not self.no_files:
             infix = "--fold" + str(self.fold_idx) if self.fold_idx >= 0 else ""
-            filename = self.run_name + infix + suffix + '.pt'
+            filename = self.run_name + infix + suffix + '__' + str(self.generation) + '.pt'
             model_file = os.path.join(self.model_dir, filename)
             torch.save(model.state_dict(), model_file)
             self.whisper("Model saved as "+model_file)
@@ -74,7 +82,7 @@ class Logger:
     def log(self, message):
         if isinstance(message, dict):
             # result_format_str = '{0[epoch]:5}\t{0[iteration]:5}\t{0[fold]:3d}\t{0[training][loss]:10.7f}\t{0[training][accuracy]:10.4f}\t{0[training][macro_f1_score]:10.4f}\t{0[training][macro_f1_score_main]:10.4f}\t{0[training][total]:7d}\t{0[validation][loss]:10.7f}\t{0[validation][accuracy]:10.4f}\t{0[validation][macro_f1_score]:10.4f}\t{0[validation][macro_f1_score_main]:10.4f}\t{0[validation][total]:7d}\t{0[model]:30}'
-            message = '\t'.join([str(message[key]) for key in sorted(message.keys())])
+            message = str(self.generation) + '\t' + '\t'.join([str(message[key]) for key in sorted(message.keys())])
         if not self.no_files:
             filename = self.run_name+'.log'
             log_file = os.path.join(self.log_dir, filename)
