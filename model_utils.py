@@ -167,8 +167,8 @@ def get_scores(predictions, indices, idx_to_word, word_to_idx, word_vectors):
     """
     # TODO @Future: More of this could be done on gpu (e.g.: https://www.kaggle.com/igormq/f-beta-score-for-pytorch/code )
 
-    for i, ind in enumerate(indices[100:200]):
-        print(idx_to_word[ind].ljust(18), predictions[i+100].ljust(18))
+    # for i, ind in enumerate(indices[100:200]):
+    #     print(idx_to_word[ind].ljust(18), predictions[i+100].ljust(18))
 
     str_sims = []
     sem_sims = []
