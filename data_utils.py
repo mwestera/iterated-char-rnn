@@ -170,8 +170,8 @@ def get_data(settings, stats=True):
     word_to_idx = {idx_to_word[i]: i for i in range(len(idx_to_word))}
 
     if stats:
-        avg_inter_str_dist, avg_inter_sem_dist, comp = correlation(word_vectors, idx_to_word, idx_to_word[:500],
-                                                               word_ids=list(range(500)))
+        avg_inter_str_dist, avg_inter_sem_dist, comp = correlation(word_vectors, idx_to_word, idx_to_word[:1000],
+                                                               word_ids=list(range(1000)))
         print('correlation of top 1000 words:', avg_inter_str_dist, avg_inter_sem_dist, comp)
         # TODO Expand this.
 
@@ -217,6 +217,8 @@ def correlation(word_vectors, idx_to_word, strings=None, word_ids=None):
             strings = [idx_to_word[i] for i in word_ids]
 
     n_words = len(word_ids)
+
+    word_vectors = torch.from_numpy(word_vectors)
 
     inter_str_dist = np.zeros((n_words, n_words)) - 1
     inter_sem_dist = np.zeros((n_words, n_words)) - 1
