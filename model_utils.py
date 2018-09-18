@@ -175,7 +175,7 @@ def get_scores(predictions, indices, idx_to_word, word_to_idx, word_vectors):
     com_accs = []
 
     for i, pred in zip(indices, predictions):
-        str_sim = 1.0 - (distance.levenshtein(idx_to_word[i], pred) / max(len(idx_to_word[i]), len(pred)))
+        str_sim = 1.0 - (distance.levenshtein(idx_to_word[i], pred) / max(len(idx_to_word[i]), len(pred), 1))
 
         if str_sim == 1:
             sem_sim = 1
