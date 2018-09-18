@@ -29,7 +29,11 @@ def main():
     if args.phase == 'train' or args.phase == 'deploy':
 
         # Loading train data is needed for train, but also for deploy, namely if vocabulary doesn't exist yet:
+        # for i in range(0,100,10):
+        #     print('computing compositionality of generation',i)
+        #     settings.data.dataset = 'models/2018_07/data/fixed--2018_07_09_18_41_38__{0}.txt'.format(i)
         idx_to_word, word_to_idx, word_vectors = data_utils.get_data(settings.data, args.stats)
+        idx_to_word_original = idx_to_word
 
     if args.phase == 'train':
         logger.save_config(settings.orig)
@@ -64,6 +68,10 @@ def main():
             word_to_idx = {idx_to_word[i]: i for i in range(len(idx_to_word))}
             logger.save_word_vectors(idx_to_word, word_vectors)     # Save the data on which the next model will be trained
 
+            for i in range(0,300,5):
+                print('* ' if i not in training_ids else '  ', idx_to_word_original[i].ljust(18), idx_to_word[i].ljust(18))
+
+            # TODO Add computation of ground truth scores as well.
 
     if args.phase == 'deploy':
         logger.say(output_utils.bcolors.BOLD + 'Deploying ' + str(len(args.model)) + ' models (' + (
